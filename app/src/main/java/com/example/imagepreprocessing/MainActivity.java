@@ -17,6 +17,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -40,7 +41,7 @@ import java.io.IOException;
 public class MainActivity extends AppCompatActivity {
     private static final int PICK_IMAGE_REQUEST_CODE = 1;
     Button button;
-    TextView textView;
+    EditText textView;
     ImageView imageView;
     static  String path;
 
