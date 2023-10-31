@@ -1,7 +1,10 @@
 package com.example.imagepreprocessing;
 
+import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -11,6 +14,7 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -19,11 +23,15 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -35,84 +43,116 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 
 public class MainActivity extends AppCompatActivity {
     private static final int PICK_IMAGE_REQUEST_CODE = 1;
     Button button;
     EditText textView;
-    ImageView imageView;
+//    ImageView imageView;
     static  String path;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        imageView = findViewById(R.id.imageView);
+//        imageView = findViewById(R.id.imageView);
         button = findViewById(R.id.button);
         textView = findViewById(R.id.textView);
+
+        // Registers a photo picker activity launcher in multi-select mode.
+        // In this example, the app lets the user select up to 5 media files.
+        ActivityResultLauncher<PickVisualMediaRequest> pickMultipleMedia =
+                registerForActivityResult(new ActivityResultContracts.PickMultipleVisualMedia(), uris -> {
+                    // Callback is invoked after the user selects media items or closes the
+                    // photo picker.
+                    if (!uris.isEmpty()) {
+                        Log.d("PhotoPickers", "Number of items selected: " + uris.size());
+                        for (Uri imageUri:uris){
+                            Log.d("PhotoPickers",imageUri+"");
+
+                            path=getPathFromUri(imageUri);
+//                            saveImagePathToSharedPreferences(path);
+                            InputImage image;
+//            BitmapFactory.Options options = new BitmapFactory.Options();
+//            options.inSampleSize=2;
+                            int minheightwidth =32;
+                            int imgwidth;
+                            int imgheight;
+                            float scale;
+                            int newwidth, newHeight;
+                            Bitmap bitmap = BitmapFactory.decodeFile(path);
+                            imgheight = bitmap.getHeight();
+                            imgwidth = bitmap.getWidth();
+
+                            // scalling
+                            if(imgheight<minheightwidth||imgwidth<minheightwidth){
+                                scale = Math.max((float)minheightwidth/imgwidth,(float) minheightwidth/imgheight);
+                                newwidth = Math.round(imgwidth * scale);
+                                newHeight = Math.round(imgheight*scale);
+                                bitmap = Bitmap.createScaledBitmap(bitmap,newwidth,newHeight,true);
+
+                            }
+
+                            image = InputImage.fromBitmap(convertToBlackAndWhite(bitmap),0);
+//            imageView.setImageBitmap(convertToBlackAndWhite(bitmap));
+//                            saveBlackAndWhiteImage(convertToBlackAndWhite(bitmap));
+                            TextRecognizer recognizer = TextRecognition.getClient(new DevanagariTextRecognizerOptions.Builder().build());
+                            Task<Text> result = recognizer.process(image).addOnSuccessListener(new OnSuccessListener<Text>() {
+                                @Override
+                                public void onSuccess(Text text) {
+                                    if (text.getTextBlocks().isEmpty()){
+                                        return;
+                                    }
+                                    Log.i("PhotoPickers", "onSuccess: "+text.getText());
+                                    // onsuccess operations
+
+                                    textView.setText(textView.getText() + "\n\n"+text.getText());
+                                }
+                            }).addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    Log.d("error","failure: "+e);
+                                }
+                            });
+
+
+
+
+                        }
+                    } else {
+                        Log.d("PhotoPickers", "No media selected");
+                    }
+
+                });
+
 
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Intent intent = new Intent(Intent.ACTION_PICK);
-                intent.setType("image/*");
+//                Intent intent = new Intent(Intent.ACTION_PICK);
+//                intent.setType("image/*");
 //                Intent intent = Intent.createChooser(chooseFile, "Choose an image");
-                startActivityForResult(intent, PICK_IMAGE_REQUEST_CODE);
+//                startActivityForResult(intent, PICK_IMAGE_REQUEST_CODE);
 
+                // launch the photo picker and let the user choose images
+                // and videos. If you want the user to select a specific type of media file,
+                // use the overloaded versions of launch(), as shown in the section about how
+                // to select a single media item.
+                pickMultipleMedia.launch(new PickVisualMediaRequest.Builder()
+                        .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE).build());
+                                        // this warning can be ignored
 
             }
         });
-
     }
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == PICK_IMAGE_REQUEST_CODE && resultCode == RESULT_OK) {
-            Uri imageUri = data.getData();
-            path=getPathFromUri(imageUri);
-            saveImagePathToSharedPreferences(path);
-            InputImage image;
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inSampleSize=2;
-            int minheightwidth =32;
-            int imgwidth;
-            int imgheight;
-            float scale;
-            int newwidth, newHeight;
-            Bitmap bitmap = BitmapFactory.decodeFile(path);
-            imgheight = bitmap.getHeight();
-            imgwidth = bitmap.getWidth();
-            if(imgheight<minheightwidth||imgwidth<minheightwidth){
-                scale = Math.max((float)minheightwidth/imgwidth,(float) minheightwidth/imgheight);
-                newwidth = Math.round(imgwidth * scale);
-                newHeight = Math.round(imgheight*scale);
-                bitmap = Bitmap.createScaledBitmap(bitmap,newwidth,newHeight,true);
 
-            }
-            image = InputImage.fromBitmap(convertToBlackAndWhite(bitmap),0);
-            imageView.setImageBitmap(convertToBlackAndWhite(bitmap));
-            saveBlackAndWhiteImage(convertToBlackAndWhite(bitmap));
-            TextRecognizer recognizer = TextRecognition.getClient(new DevanagariTextRecognizerOptions.Builder().build());
-            Task<Text> result = recognizer.process(image).addOnSuccessListener(new OnSuccessListener<Text>() {
-                @Override
-                public void onSuccess(Text text) {
-                    if (text.getTextBlocks().isEmpty()){
-                        return;
-                    }
-                    textView.setText(text.getText());
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    Log.d("error","failure: "+e);
-                }
-            });
-            // Perform operations on the selected image file
-        }
-    }
     private String getPathFromUri(Uri uri) {
         String[] projection = {MediaStore.Images.Media.DATA};
         Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
