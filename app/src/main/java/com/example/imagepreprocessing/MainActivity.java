@@ -18,6 +18,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -47,15 +48,41 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int PICK_IMAGE_REQUEST_CODE = 1;
+
+    private static final int WRITE_PERMISSION_REQUEST_CODE = 1;
+    private static final int PICK_MULTIPLE_IMAGES = 2;
     Button button;
     EditText textView;
 //    ImageView imageView;
     static  String path;
 
 
+    private void requestPermission() {
+        // if android is > 11
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+            Uri uri = Uri.fromParts("package", getPackageName(), null);
+            intent.setData(uri);
+
+            // check if already permitted
+            if (!Environment.isExternalStorageManager()){
+                startActivity(intent);
+            }
+
+        } else {
+            // Check if the permission is already granted
+            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                // You already have permission; perform your storage operations here
+                Log.d("PhotoPickers", "onCreate: permission granted");
+            } else {
+                // Request permission from the user
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, WRITE_PERMISSION_REQUEST_CODE);
+            }
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,43 +92,29 @@ public class MainActivity extends AppCompatActivity {
         button = findViewById(R.id.button);
         textView = findViewById(R.id.textView);
 
+       requestPermission();
+
+
+
+
         // Registers a photo picker activity launcher in multi-select mode.
         // In this example, the app lets the user select up to 5 media files.
+//        Log.d("PhotoPickers", "Photo picker available "+ ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable());
         ActivityResultLauncher<PickVisualMediaRequest> pickMultipleMedia =
-                registerForActivityResult(new ActivityResultContracts.PickMultipleVisualMedia(), uris -> {
+                registerForActivityResult(new ActivityResultContracts.PickMultipleVisualMedia(50), uris -> {
                     // Callback is invoked after the user selects media items or closes the
                     // photo picker.
                     if (!uris.isEmpty()) {
                         Log.d("PhotoPickers", "Number of items selected: " + uris.size());
                         for (Uri imageUri:uris){
                             Log.d("PhotoPickers",imageUri+"");
-
-                            path=getPathFromUri(imageUri);
-//                            saveImagePathToSharedPreferences(path);
-                            InputImage image;
-//            BitmapFactory.Options options = new BitmapFactory.Options();
-//            options.inSampleSize=2;
-                            int minheightwidth =32;
-                            int imgwidth;
-                            int imgheight;
-                            float scale;
-                            int newwidth, newHeight;
-                            Bitmap bitmap = BitmapFactory.decodeFile(path);
-                            imgheight = bitmap.getHeight();
-                            imgwidth = bitmap.getWidth();
-
-                            // scalling
-                            if(imgheight<minheightwidth||imgwidth<minheightwidth){
-                                scale = Math.max((float)minheightwidth/imgwidth,(float) minheightwidth/imgheight);
-                                newwidth = Math.round(imgwidth * scale);
-                                newHeight = Math.round(imgheight*scale);
-                                bitmap = Bitmap.createScaledBitmap(bitmap,newwidth,newHeight,true);
-
+                            InputImage image = null;
+                            try {
+                                image = InputImage.fromFilePath(MainActivity.this,imageUri);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
                             }
-
-                            image = InputImage.fromBitmap(convertToBlackAndWhite(bitmap),0);
-//            imageView.setImageBitmap(convertToBlackAndWhite(bitmap));
-//                            saveBlackAndWhiteImage(convertToBlackAndWhite(bitmap));
+//
                             TextRecognizer recognizer = TextRecognition.getClient(new DevanagariTextRecognizerOptions.Builder().build());
                             Task<Text> result = recognizer.process(image).addOnSuccessListener(new OnSuccessListener<Text>() {
                                 @Override
@@ -112,7 +125,7 @@ public class MainActivity extends AppCompatActivity {
                                     Log.i("PhotoPickers", "onSuccess: "+text.getText());
                                     // onsuccess operations
 
-                                    textView.setText(textView.getText() + "\n\n"+text.getText());
+                                    textView.setText(textView.getText() + "\n\n------------\n\n"+text.getText());
                                 }
                             }).addOnFailureListener(new OnFailureListener() {
                                 @Override
@@ -135,11 +148,8 @@ public class MainActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-//                Intent intent = new Intent(Intent.ACTION_PICK);
-//                intent.setType("image/*");
-//                Intent intent = Intent.createChooser(chooseFile, "Choose an image");
-//                startActivityForResult(intent, PICK_IMAGE_REQUEST_CODE);
 
+//                pickMultipleImages();
                 // launch the photo picker and let the user choose images
                 // and videos. If you want the user to select a specific type of media file,
                 // use the overloaded versions of launch(), as shown in the section about how
@@ -151,6 +161,59 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
+    private void pickMultipleImages() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(intent, PICK_MULTIPLE_IMAGES);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d("PhotoPickers", "onResume: ");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_MULTIPLE_IMAGES && resultCode == RESULT_OK) {
+            if (data != null) {
+                // Get a list of selected image URIs
+                ArrayList<Uri> selectedImageUris = new ArrayList<>();
+                if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount();
+                    for (int i = 0; i < count; i++) {
+                        Uri imageUri = data.getClipData().getItemAt(i).getUri();
+                        selectedImageUris.add(imageUri);
+                    }
+                } else if (data.getData() != null) {
+                    // Handle single image selection here
+                    Uri imageUri = data.getData();
+                    selectedImageUris.add(imageUri);
+                }
+
+                // Process the selected image URIs, for example, display or store them
+                for (Uri uri : selectedImageUris) {
+                    // Do something with the selected image URI
+                }
+            }
+        }
+    }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == WRITE_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, you can now perform your storage operations
+            } else {
+                // Permission denied; handle this scenario, show a message, or gracefully degrade functionality
+            }
+        }
+    }
+
 
 
     private String getPathFromUri(Uri uri) {
