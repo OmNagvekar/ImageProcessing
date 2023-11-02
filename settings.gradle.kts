@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ImagePreprocessing"
 include(":app")
- 
+include(":lib")
