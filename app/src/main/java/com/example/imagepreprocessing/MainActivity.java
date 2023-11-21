@@ -11,6 +11,7 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -45,17 +46,14 @@ import java.io.IOException;
 public class MainActivity extends AppCompatActivity {
 
     private static final int WRITE_PERMISSION_REQUEST_CODE = 1;
-
+    TextView textView;
     Button button;
+    Button refresh;
 
     String tag;
-    int counter;
+    int counter,spamCounter=0,hamCounter=0;
 
     SwitchMaterial aSwitch;
-
-
-
-
 
     public static String normalizeText(String input) {
         // Your text normalization code here
@@ -127,6 +125,50 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public void spamHamCounter(){
+        int spamhamcounter,last;
+        spamCounter=0;
+        hamCounter=0;
+        String value;
+        try {
+            FileInputStream fis = new FileInputStream(Environment.getExternalStoragePublicDirectory("/Image_Processing_Exports")+"/demo.xls");
+            Workbook workbook1 = new HSSFWorkbook(fis);
+            Sheet sheet1= workbook1.getSheet("Sheet0");
+            last = sheet1.getLastRowNum();
+            for (spamhamcounter=0;spamhamcounter<=last;spamhamcounter++){
+                value = sheet1.getRow(spamhamcounter).getCell(1).getStringCellValue();
+                if (value.equalsIgnoreCase("spam")){
+                    spamCounter+=1;
+                }
+                if (value.equalsIgnoreCase("ham")){
+                    hamCounter+=1;
+                }
+            }
+            textView.setText("Spam = "+spamCounter+" | Ham = "+hamCounter);
+//            Log.d("abcd", "spamHamCounter: spam = "+spamCounter);
+//            Log.d("abcd", "spamHamCounter: ham = "+hamCounter);
+            fis.close();
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refresh = findViewById(R.id.button2);
+        refresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = getIntent();
+                finish(); // Finish the current instance of the activity
+                startActivity(intent);
+            }
+        });
+        spamHamCounter();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
@@ -135,6 +177,7 @@ public class MainActivity extends AppCompatActivity {
 
         aSwitch = findViewById(R.id.category_switch);
         button = findViewById(R.id.button);
+        textView = findViewById(R.id.counters);
         try {
             requestPermission();
         } catch (IOException e) {
@@ -229,7 +272,6 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(MainActivity.this,"Excel file updated",Toast.LENGTH_SHORT).show();
 
 
-
                     } else {
                         Log.d("PhotoPickers", "No media selected");
                     }
@@ -270,63 +312,4 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-//    public Bitmap convertToBlackAndWhite(Bitmap orignalBitmap){
-//        Bitmap blckAndWhiteBitmap = Bitmap.createBitmap(orignalBitmap.getWidth(),orignalBitmap.getHeight(),Bitmap.Config.RGB_565);
-//        Canvas canvas = new Canvas(blckAndWhiteBitmap);
-//        ColorMatrix colorMatrix = new ColorMatrix();
-//        colorMatrix.setSaturation(0);
-//        Paint paint = new Paint();
-//        paint.setColorFilter( new ColorMatrixColorFilter(colorMatrix));
-//        canvas.drawBitmap(orignalBitmap,0,0,paint);
-//        return blckAndWhiteBitmap;
-//    }
-//    private void saveBlackAndWhiteImage(Bitmap blackAndWhiteBitmap) {
-//        // Check if external storage is available
-//        String state = Environment.getExternalStorageState();
-//        if (Environment.MEDIA_MOUNTED.equals(state)) {
-//            // Define the directory where you want to save the image
-//            File directory = new File(Environment.getExternalStorageDirectory(), "MyAppImages");
-//
-//            // Create the directory if it doesn't exist
-//            if (!directory.exists()) {
-//                directory.mkdirs();
-//            }
-//
-//            // Define the filename for the saved image
-//            String fileName = "black_and_white_image.jpg";
-//
-//            // Create a file object with the directory and filename
-//            File imageFile = new File(directory, fileName);
-//            if (imageFile.exists()) {
-//                int fileCounter = 1;
-//                String newFileName;
-//
-//                // Keep incrementing a counter until a unique filename is found
-//                do {
-//                    newFileName = "black_and_white_image_" + fileCounter + ".jpg";
-//                    imageFile = new File(directory, newFileName);
-//                    fileCounter++;
-//                } while (imageFile.exists());
-//            }
-//
-//            // Create an output stream to write the image data to the file
-//            try (FileOutputStream fos = new FileOutputStream(imageFile)) {
-//                // Compress and save the black and white bitmap as a JPEG image
-//                blackAndWhiteBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
-//
-//                // Notify the MediaScanner about the new image
-//                MediaScannerConnection.scanFile(this, new String[]{imageFile.getAbsolutePath()}, null, null);
-//
-//                // Display a toast message to indicate successful save
-//                Toast.makeText(this, "Image saved successfully", Toast.LENGTH_SHORT).show();
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//                // Handle the exception, e.g., show an error message
-//                Toast.makeText(this, "Error saving image", Toast.LENGTH_SHORT).show();
-//            }
-//        } else {
-//            // External storage is not available, handle accordingly
-//            Toast.makeText(this, "External storage not available", Toast.LENGTH_SHORT).show();
-//        }
-//    }
 }
